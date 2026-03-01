@@ -3,6 +3,7 @@
 #include "../ai1/compiler.h"
 #include "../../byte_writer.h"
 #include "../../charset.h"
+#include "../../utf8.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -348,15 +349,17 @@ static void emit_text_chars(ByteWriter& out, const std::string& text, Charset& c
     for (char32_t cp : chars) {
         auto sjis_opt = cs.char_to_sjis(cp);
 
-        if (sjis_opt.has_value()) {
-            const auto& sjis = *sjis_opt;
+        if (!sjis_opt.has_value()) {
+            throw std::runtime_error("cannot encode character '" + char32_to_utf8(cp) + "' to SJIS");
+        }
 
-            if (sjis.size() == 2) {
-                emit_chr(out, sjis[0], sjis[1], cfg, dict_lookup);
-            } else if (sjis.size() == 1) {
-                // single-byte characters should not appear in text runs
-                out.emit(static_cast<uint8_t>(sjis[0]));
-            }
+        const auto& sjis = *sjis_opt;
+
+        if (sjis.size() == 2) {
+            emit_chr(out, sjis[0], sjis[1], cfg, dict_lookup);
+        } else if (sjis.size() == 1) {
+            // single-byte characters should not appear in text runs
+            out.emit(static_cast<uint8_t>(sjis[0]));
         }
     }
 }

@@ -2,6 +2,7 @@
 #include "tokens.h"
 #include "../../byte_writer.h"
 #include "../../charset.h"
+#include "../../utf8.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -179,9 +180,7 @@ void emit_str_bytes(ByteWriter& out, const std::string& s) {
             if (cp >= 0xFF61 && cp <= 0xFF9F) {
                 out.emit(static_cast<uint8_t>(cp - 0xFEC0));
             } else {
-                out.emit(b);
-                out.emit(static_cast<uint8_t>(s[i + 1]));
-                out.emit(static_cast<uint8_t>(s[i + 2]));
+                throw std::runtime_error("character '" + char32_to_utf8(cp) + "' cannot be encoded in a str node");
             }
 
             i += 3;
@@ -193,8 +192,7 @@ void emit_str_bytes(ByteWriter& out, const std::string& s) {
             if (cp <= 0xFF) {
                 out.emit(static_cast<uint8_t>(cp));
             } else {
-                out.emit(b);
-                out.emit(static_cast<uint8_t>(s[i + 1]));
+                throw std::runtime_error("character '" + char32_to_utf8(cp) + "' cannot be encoded in a str node");
             }
 
             i += 2;
@@ -369,10 +367,12 @@ static void emit_text_chars(ByteWriter& out, const std::string& text, Charset& c
     for (char32_t cp : chars) {
         auto sjis_opt = cs.char_to_sjis(cp);
 
-        if (sjis_opt.has_value()) {
-            for (int b : *sjis_opt) {
-                out.emit(static_cast<uint8_t>(b));
-            }
+        if (!sjis_opt.has_value()) {
+            throw std::runtime_error("cannot encode character '" + char32_to_utf8(cp) + "' to SJIS");
+        }
+
+        for (int b : *sjis_opt) {
+            out.emit(static_cast<uint8_t>(b));
         }
     }
 }

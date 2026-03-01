@@ -1,6 +1,7 @@
 #include "compiler.h"
 #include "../../byte_writer.h"
 #include "../../charset.h"
+#include "../../utf8.h"
 
 #include <stdexcept>
 #include <unordered_map>
@@ -155,6 +156,17 @@ static void emit_reg(ByteWriter& out, int n, bool flag) {
 
 // encode a variable operation/condition (no extraop, 2 bytes)
 static void emit_var(ByteWriter& out, int var_idx, int f, int val) {
+
+    if (var_idx < 0 || var_idx > 63) {
+        throw std::runtime_error("variable index " + std::to_string(var_idx) +
+            " out of range for non-extraop encoding (0-63)");
+    }
+
+    if (val < 0 || val > 15) {
+        throw std::runtime_error("variable value " + std::to_string(val) +
+            " out of range for non-extraop encoding (0-15)");
+    }
+
     uint16_t v = static_cast<uint16_t>(0x1000 | (f << 10) | (var_idx << 4) | (val & 0x0F));
     out.emit(static_cast<uint8_t>(v >> 8));
     out.emit(static_cast<uint8_t>(v & 0xFF));
@@ -171,6 +183,17 @@ static uint8_t checked_byte(int n, const std::string& context) {
 }
 
 static void emit_var2(ByteWriter& out, int var_idx, int f, int j, bool m) {
+
+    if (var_idx < 0 || var_idx > 31) {
+        throw std::runtime_error("variable index " + std::to_string(var_idx) +
+            " out of range for extraop encoding (0-31)");
+    }
+
+    if (j < 0 || j > 255) {
+        throw std::runtime_error("variable value " + std::to_string(j) +
+            " out of range for extraop encoding (0-255)");
+    }
+
     uint8_t j1 = static_cast<uint8_t>((j >> 7) & 0x01);
     uint8_t j2 = static_cast<uint8_t>(j & 0x7F);
     uint8_t c1 = static_cast<uint8_t>(0x10 | (f << 1) | (m ? 1 : 0));
@@ -278,7 +301,7 @@ static void emit_text_char(ByteWriter& out, char32_t cp, Charset& cs) {
     auto sjis_opt = cs.char_to_sjis(cp);
 
     if (!sjis_opt.has_value()) {
-        throw std::runtime_error("cannot encode character to SJIS");
+        throw std::runtime_error("cannot encode character '" + char32_to_utf8(cp) + "' to SJIS");
     }
 
     const auto& sjis = *sjis_opt;
@@ -1119,13 +1142,13 @@ static void emit_stmt(ByteWriter& out, const AstNode& node, const Config& cfg, C
     // ── branch-var ───────────────────────────────────────────────
 
     if (tag == "branch-var") {
-        out.emit(0xB4);
-
-        // first child is a variable
-        if (!node.children.empty() && is_var_node(node.children[0])) {
-            int idx = var_to_index(node.children[0]);
-            out.emit(static_cast<uint8_t>('A' + idx));
+        if (node.children.empty() || !is_var_node(node.children[0])) {
+            throw std::runtime_error("'branch-var' requires a variable as first argument");
         }
+
+        out.emit(0xB4);
+        int idx = var_to_index(node.children[0]);
+        out.emit(static_cast<uint8_t>('A' + idx));
 
         // remaining children (block)
         for (size_t i = 1; i < node.children.size(); i++) {
