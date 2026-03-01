@@ -3,7 +3,7 @@
 #include "../../ast.h"
 #include "../../byte_stream.h"
 #include "../../config.h"
-#include "../parse_error.h"
+#include "../engine.h"
 #include "tokens.h"
 
 namespace ai1 {
