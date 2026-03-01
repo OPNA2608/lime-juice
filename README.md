@@ -1,4 +1,4 @@
-# NOTE: Until I write a real one, this readme is just a direct copy of the original Juice readme. Please be patient & wait warmly.
+# NOTE: Until I write a real one, this readme is just a direct copy of dantecsm's Juice fork. Please be patient & wait warmly.
 
 ## Usage
 Install [Racket](https://racket-lang.org/) and run the following command:
