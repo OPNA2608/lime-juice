@@ -1,3 +1,5 @@
+#include "auto_detect.h"
+#include "auto_wrap.h"
 #include "config.h"
 #include "sexp_writer.h"
 #include "sexp_reader.h"
@@ -91,6 +93,8 @@ static void print_usage() {
     std::cerr << "  --no-decode         {decompile} skip SJIS character decoding" << std::endl;
     std::cerr << "  --no-resolve        {decompile} skip cmd/sys name resolution" << std::endl;
     std::cerr << "  --no-compress       {compile} skip AI5 dictionary compression" << std::endl;
+    std::cerr << "  --auto-engine       {decompile} auto-detect engine type from file" << std::endl;
+    std::cerr << "  --auto-wrap         {compile} auto-wrap text to fit text-frame width" << std::endl;
 }
 
 static void show_presets() {
@@ -328,7 +332,7 @@ static void apply_meta_config(const AstNode& ast, Config& cfg) {
 }
 
 static void compile_file(const std::string& path, Config& cfg, bool force,
-                         const std::string& output_override = "") {
+                         bool wrap, const std::string& output_override = "") {
 
     if (!has_extension(path, ".rkt")) {
         print_color("b-white", fs::path(path).filename().string());
@@ -370,6 +374,11 @@ static void compile_file(const std::string& path, Config& cfg, bool force,
         // cli flags override these if explicitly set before the file args
         Config compile_cfg = cfg;
         apply_meta_config(ast, compile_cfg);
+
+        // auto-wrap text to fit text-frame widths
+        if (wrap) {
+            auto_wrap_ast(ast);
+        }
 
         // compile based on engine type
         std::vector<uint8_t> compiled;
@@ -419,6 +428,9 @@ int main(int argc, char* argv[]) {
     Command command = Command::None;
     Config cfg;
     bool force = false;
+    bool auto_engine = false;
+    bool auto_wrap = false;
+    bool explicit_engine = false;
     std::string output_path;
     std::vector<std::string> file_args;
 
@@ -445,6 +457,7 @@ int main(int argc, char* argv[]) {
         } else if ((arg == "-e" || arg == "--engine") && i + 1 < argc) {
             i++;
             cfg.set_engine(argv[i]);
+            explicit_engine = true;
         } else if ((arg == "-C" || arg == "--charset") && i + 1 < argc) {
             i++;
             cfg.charset_name = argv[i];
@@ -459,6 +472,10 @@ int main(int argc, char* argv[]) {
             cfg.resolve = false;
         } else if (arg == "--no-compress") {
             cfg.compress = false;
+        } else if (arg == "--auto-engine") {
+            auto_engine = true;
+        } else if (arg == "--auto-wrap") {
+            auto_wrap = true;
         } else if (arg == "--protag" && i + 1 < argc) {
             i++;
             cfg.set_protag(argv[i]);
@@ -484,6 +501,12 @@ int main(int argc, char* argv[]) {
             return 0;
 
         case Command::Decompile: {
+
+            if (auto_wrap) {
+                std::cerr << "--auto-wrap is only valid with --compile" << std::endl;
+                return 1;
+            }
+
             auto paths = expand_globs(file_args);
 
             if (paths.empty()) {
@@ -494,6 +517,30 @@ int main(int argc, char* argv[]) {
             if (!output_path.empty() && paths.size() > 1) {
                 std::cerr << "-o cannot be used with multiple input files" << std::endl;
                 return 1;
+            }
+
+            // auto-detect engine from first file
+            if (auto_engine && !explicit_engine) {
+                std::ifstream probe(paths[0], std::ios::binary);
+
+                if (!probe.is_open()) {
+                    std::cerr << "cannot open: " << paths[0] << std::endl;
+                    return 1;
+                }
+
+                std::vector<uint8_t> probe_bytes(
+                    (std::istreambuf_iterator<char>(probe)),
+                    std::istreambuf_iterator<char>());
+
+                cfg.engine = detect_engine(probe_bytes);
+                std::string engine_name;
+
+                if (cfg.engine == EngineType::ADV) { engine_name = "ADV"; }
+                else if (cfg.engine == EngineType::AI1) { engine_name = "AI1"; }
+                else { engine_name = "AI5"; }
+
+                print_color("b-cyan", "auto-engine: " + engine_name);
+                std::cout << std::endl;
             }
 
             for (const auto& path : paths) {
@@ -504,6 +551,12 @@ int main(int argc, char* argv[]) {
         }
 
         case Command::Compile: {
+
+            if (auto_engine) {
+                std::cerr << "--auto-engine is only valid with --decompile" << std::endl;
+                return 1;
+            }
+
             auto paths = expand_globs(file_args);
 
             if (paths.empty()) {
@@ -517,7 +570,7 @@ int main(int argc, char* argv[]) {
             }
 
             for (const auto& path : paths) {
-                compile_file(path, cfg, force, output_path);
+                compile_file(path, cfg, force, auto_wrap, output_path);
             }
 
             return 0;

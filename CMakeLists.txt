@@ -35,6 +35,8 @@ add_library(juice_lib STATIC
     src/engine/adv/parser.cpp
     src/engine/adv/loader.cpp
     src/engine/adv/compiler.cpp
+    src/auto_detect.cpp
+    src/auto_wrap.cpp
 )
 target_include_directories(juice_lib PUBLIC src)
 
