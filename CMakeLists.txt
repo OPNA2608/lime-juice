@@ -53,6 +53,11 @@ endif()
 add_executable(juice src/main.cpp)
 target_link_libraries(juice PRIVATE juice_lib)
 
+# statically link gcc/c++ runtime on MinGW so users don't need the dlls
+if(MINGW)
+    target_link_options(juice PRIVATE -static)
+endif()
+
 # tests (optional, enabled with -DBUILD_TESTING=ON)
 option(BUILD_TESTING "Build unit tests" OFF)
 if(BUILD_TESTING)
