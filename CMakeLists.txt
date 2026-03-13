@@ -7,6 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Iconv)
 
+# shared CLI utilities (used by both juice and juice-img)
 add_library(cli_utils STATIC
     src/cli_utils.cpp
 )
@@ -64,6 +65,27 @@ target_link_libraries(juice PRIVATE juice_lib cli_utils)
 if(MINGW)
     target_link_options(juice PRIVATE -static)
 endif()
+
+# image codec library (separate from juice_lib, no shared dependencies)
+add_library(juice_img_lib STATIC
+    src/image/image.cpp
+    src/image/png_io.cpp
+    src/image/gif_io.cpp
+    src/codec/gpc/gpc_decode.cpp
+    src/codec/gpc/gpc_encode.cpp
+    src/codec/gpa/gpa_decode.cpp
+    src/codec/gpa/gpa_encode.cpp
+    src/codec/gp4/gp4_decode.cpp
+    src/codec/gp4/gp4_encode.cpp
+    third_party/lodepng/lodepng.cpp
+    third_party/lecram/gifdec.c
+    third_party/lecram/gifenc.c
+)
+target_include_directories(juice_img_lib PUBLIC src third_party)
+
+# image tool executable
+add_executable(juice-img src/img_main.cpp)
+target_link_libraries(juice-img PRIVATE juice_img_lib cli_utils)
 
 if(MINGW)
     target_link_options(juice-img PRIVATE -static)
