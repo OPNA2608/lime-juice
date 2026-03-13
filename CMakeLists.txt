@@ -7,6 +7,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Iconv)
 
+add_library(cli_utils STATIC
+    src/cli_utils.cpp
+)
+target_include_directories(cli_utils PUBLIC src)
+
 # core library (all logic except main)
 add_library(juice_lib STATIC
     src/config.cpp
@@ -53,7 +58,7 @@ endif()
 
 # main executable
 add_executable(juice src/main.cpp)
-target_link_libraries(juice PRIVATE juice_lib)
+target_link_libraries(juice PRIVATE juice_lib cli_utils)
 
 # statically link gcc/c++ runtime on MinGW so users don't need the dlls
 if(MINGW)

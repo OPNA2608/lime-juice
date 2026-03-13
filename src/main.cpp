@@ -1,5 +1,6 @@
 #include "auto_detect.h"
 #include "auto_wrap.h"
+#include "cli_utils.h"
 #include "config.h"
 #include "sexp_writer.h"
 #include "sexp_reader.h"
@@ -10,20 +11,12 @@
 #include "engine/ai5/compiler.h"
 #include "engine/adv/compiler.h"
 
-#include <algorithm>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <regex>
 #include <sstream>
 #include <string>
-#include <utility>
 #include <vector>
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 namespace fs = std::filesystem;
 
@@ -37,40 +30,6 @@ enum class Command {
     ShowPreset,
     ShowVersion,
 };
-
-// ansi color helpers
-static void print_color(const std::string& color, const std::string& text) {
-    // color codes: b-white=97, b-green=92, b-red=91, b-yellow=93, b-blue=94, b-cyan=96, b-magenta=95
-    std::string code;
-
-    if (color == "b-white")   { code = "97"; }
-    else if (color == "b-green")   { code = "92"; }
-    else if (color == "b-red")     { code = "91"; }
-    else if (color == "b-yellow")  { code = "93"; }
-    else if (color == "b-blue")    { code = "94"; }
-    else if (color == "b-cyan")    { code = "96"; }
-    else if (color == "b-magenta") { code = "95"; }
-
-    if (!code.empty()) {
-        std::cout << "\033[" << code << "m" << text << "\033[0m";
-    } else {
-        std::cout << text;
-    }
-}
-
-static void println_color(const std::string& color, const std::string& text) {
-    print_color(color, text);
-    std::cout << std::endl;
-}
-
-static bool has_extension(const std::string& path, const std::string& ext) {
-    std::string lower_path = path;
-    std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(), ::tolower);
-    std::string lower_ext = ext;
-    std::transform(lower_ext.begin(), lower_ext.end(), lower_ext.begin(), ::tolower);
-    return lower_path.size() >= lower_ext.size() &&
-           lower_path.compare(lower_path.size() - lower_ext.size(), lower_ext.size(), lower_ext) == 0;
-}
 
 static void print_usage() {
     std::cerr << "usage: " << TITLE << " <command> [options] <files...>" << std::endl;
@@ -111,95 +70,6 @@ static void show_presets() {
         print_color("b-white", padded);
         std::cout << " : " << p.title << std::endl;
     }
-}
-
-// for globbing: applies multiple replacements in a single pass (first match wins at each position)
-static void replace_all(std::string& s,
-    const std::vector<std::pair<std::string, std::string>>& ops) {
-    std::string buf;
-    buf.reserve(s.size());
-
-    for (std::size_t i = 0; i < s.size(); ) {
-        bool matched = false;
-
-        for (const auto& [needle, repl] : ops) {
-
-            if (s.compare(i, needle.size(), needle) == 0) {
-                buf += repl;
-                i += needle.size();
-                matched = true;
-                break;
-            }
-        }
-
-        if (!matched) {
-            buf += s[i];
-            i++;
-        }
-    }
-
-    s.swap(buf);
-}
-
-// expand glob patterns in file arguments
-static std::vector<std::string> expand_globs(const std::vector<std::string>& args) {
-    std::vector<std::string> result;
-
-    for (const auto& arg : args) {
-
-        // check if it contains glob characters
-        if (arg.find('*') != std::string::npos || arg.find('?') != std::string::npos) {
-            // use filesystem to expand
-            fs::path dir = fs::path(arg).parent_path();
-
-            if (dir.empty()) {
-                dir = ".";
-            }
-
-            std::string pattern = fs::path(arg).filename().string();
-            // convert glob to regex: wildcards first, then escape regex metacharacters
-            std::string patternGlob2Reg = pattern;
-            replace_all(patternGlob2Reg, {
-                {"*", ".*"},
-                {"?", "."},
-                {"\\", "\\\\"},
-                {".", "\\."},
-                {"+", "\\+"},
-                {"(", "\\("},
-                {")", "\\)"},
-                {"[", "\\["},
-                {"]", "\\]"},
-                {"{", "\\{"},
-                {"}", "\\}"},
-                {"^", "\\^"},
-                {"$", "\\$"},
-                {"|", "\\|"},
-            });
-
-            std::regex re(patternGlob2Reg);
-
-            if (fs::exists(dir) && fs::is_directory(dir)) {
-
-                for (const auto& entry : fs::directory_iterator(dir)) {
-
-                    if (!entry.is_regular_file()) {
-                        continue;
-                    }
-
-                    std::string name = entry.path().filename().string();
-
-                    if (std::regex_match(name, re)) {
-                        result.push_back(entry.path().string());
-                    }
-                }
-            }
-        } else {
-            result.push_back(arg);
-        }
-    }
-
-    std::sort(result.begin(), result.end());
-    return result;
 }
 
 static void decompile_file(const std::string& path, Config& cfg, bool force,
@@ -411,19 +281,7 @@ static void compile_file(const std::string& path, Config& cfg, bool force,
 }
 
 int main(int argc, char* argv[]) {
-
-#ifdef _WIN32
-    // enable ANSI escape sequences in Windows console (cmd.exe, PowerShell)
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-
-    if (hOut != INVALID_HANDLE_VALUE) {
-        DWORD mode = 0;
-
-        if (GetConsoleMode(hOut, &mode)) {
-            SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        }
-    }
-#endif
+    enable_ansi_console();
 
     Command command = Command::None;
     Config cfg;
@@ -493,7 +351,7 @@ int main(int argc, char* argv[]) {
 
     switch (command) {
         case Command::ShowVersion:
-            std::cout << TITLE << " " << VERSION << " (C++ rewrite)" << std::endl;
+            std::cout << TITLE << " " << VERSION << std::endl;
             return 0;
 
         case Command::ShowPreset:
