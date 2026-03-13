@@ -22,3 +22,6 @@ CMakeUserPresets.json
 *.rkt
 *.gpc
 *.gp4
+*.gpa
+
+tests/*
