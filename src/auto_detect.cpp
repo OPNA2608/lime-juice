@@ -84,9 +84,15 @@ EngineType detect_engine(const std::vector<uint8_t>& bytes) {
         return EngineType::AI1;
     }
 
-    // check ADV: last 2 bytes are FF FE (end-of-mes marker)
+    // check ADV: FF FE (end-of-mes marker), possibly followed by null padding
 
-    if (bytes[bytes.size() - 2] == 0xFF && bytes[bytes.size() - 1] == 0xFE) {
+    size_t end = bytes.size();
+
+    while (end > 0 && bytes[end - 1] == 0x00) {
+        end--;
+    }
+
+    if (end >= 2 && bytes[end - 2] == 0xFF && bytes[end - 1] == 0xFE) {
         return EngineType::ADV;
     }
 
