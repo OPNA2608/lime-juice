@@ -948,8 +948,8 @@ AstNode Parser::parse_op_execute_var() {
     return AstNode::make_list("", std::move(children));
 }
 
-AstNode Parser::parse_op_ca() {
-    // 0xCA VAR NUM* → ((cmd c) var nums...)
+AstNode Parser::parse_print_var() {
+    // 0xCA (print-var) VAR NUM* → ((cmd c) var nums...)
     uint8_t c = consume();
 
     uint8_t var_byte = consume();
@@ -1081,9 +1081,9 @@ AstNode Parser::parse_op_cmd_star() {
         return parse_op_execute_var();
     }
 
-    // op-CA: 0xCA (extraop only)
+    // print-var: 0xCA (extraop only)
     if (b == 0xCA && cfg_.extra_op) {
-        return parse_op_ca();
+        return parse_print_var();
     }
 
     // op-sound: 0xD0

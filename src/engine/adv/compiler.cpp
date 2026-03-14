@@ -47,6 +47,7 @@ static const std::unordered_map<std::string, uint8_t>& cmd_map() {
         {"mes-load?",     0xC0},
         {"load-mem",      0xC8},
         {"image-file",    0xC9},
+        {"print-var",     0xCA},
         {"exec-mem",      0xCD},
         {"image-mem",     0xCF},
         {"sound",         0xD0},
@@ -390,7 +391,7 @@ static void emit_param(ByteWriter& out, const AstNode& node, const Config& cfg, 
 
     if (node.is_variable()) {
         // variables as params are raw ASCII bytes (used by special commands
-        // like 0xB4 branch-var, 0xB6 execute-var, 0xCA op-ca)
+        // like 0xB4 branch-var, 0xB6 execute-var, 0xCA print-var)
         int idx = var_to_index(node);
         out.emit(static_cast<uint8_t>('A' + idx));
         return;

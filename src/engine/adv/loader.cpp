@@ -278,6 +278,7 @@ static std::string resolve_cmd(char32_t c, bool do_resolve) {
         case 0xC0: return "mes-load?";
         case 0xC8: return "load-mem";
         case 0xC9: return "image-file";
+        case 0xCA: return "print-var";
         case 0xCD: return "exec-mem";
         case 0xCF: return "image-mem";
         case 0xD0: return "sound";
