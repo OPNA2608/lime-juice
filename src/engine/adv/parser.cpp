@@ -1091,8 +1091,8 @@ AstNode Parser::parse_op_cmd_star() {
         return parse_op_sound();
     }
 
-    // op-decrypt: 0xD5 (extraop only)
-    if (b == 0xD5 && cfg_.extra_op) {
+    // op-decrypt: 0xD5 (extraop + decrypt_op)
+    if (b == 0xD5 && cfg_.extra_op && cfg_.decrypt_op) {
         return parse_op_decrypt();
     }
 

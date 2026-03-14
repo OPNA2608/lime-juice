@@ -23,6 +23,10 @@ namespace fs = std::filesystem;
 static const char* TITLE = "juice";
 static const char* VERSION = "v0.2.0 (lime-juice)";
 
+// thresholds for detecting suspiciously small decompiler output
+static const size_t SUSPECT_OUTPUT_MAX = 256;
+static const size_t SUSPECT_INPUT_MIN  = 64;
+
 enum class Command {
     None,
     Decompile,
@@ -102,9 +106,66 @@ static void decompile_file(const std::string& path, Config& cfg, bool force,
         std::vector<std::string> parse_warnings;
 
         if (cfg.engine == EngineType::ADV) {
-            auto result = adv::load_mes(path, cfg);
-            ast = std::move(result.ast);
-            parse_warnings = std::move(result.warnings);
+            bool should_retry = false;
+            size_t input_bytes = fs::file_size(path);
+
+            try {
+                auto result = adv::load_mes(path, cfg);
+                ast = std::move(result.ast);
+                parse_warnings = std::move(result.warnings);
+
+                // check if the first attempt looks wrong
+                size_t first_seg_count = 0;
+
+                for (const auto& child : ast.children) {
+
+                    if (child.tag != "meta") {
+                        first_seg_count++;
+                    }
+                }
+
+                if (first_seg_count == 0) {
+                    should_retry = true;
+                }
+
+                // also retry if output is suspiciously small relative
+                // to input, which happens when D5 decrypt consumes
+                // valid segment data
+                if (!should_retry && input_bytes > SUSPECT_INPUT_MIN) {
+                    SexpWriter probe_writer;
+                    std::string probe_output = probe_writer.format(ast);
+
+                    if (probe_output.size() < SUSPECT_OUTPUT_MAX) {
+                        should_retry = true;
+                    }
+                }
+            } catch (const std::exception&) {
+                should_retry = true;
+            }
+
+            // fallback: if ADV with extraop produced bad results or
+            // threw an exception, the D5 decrypt opcode may be
+            // consuming valid data. retry with decrypt disabled (some
+            // games use 3-byte VAR encoding without the D5 decrypt
+            // opcode).
+            if (should_retry && cfg.extra_op && cfg.decrypt_op) {
+                Config retry_cfg = cfg;
+                retry_cfg.decrypt_op = false;
+                auto retry = adv::load_mes(path, retry_cfg);
+                size_t retry_segs = 0;
+
+                for (const auto& child : retry.ast.children) {
+
+                    if (child.tag != "meta") {
+                        retry_segs++;
+                    }
+                }
+
+                if (retry_segs > 0) {
+                    ast = std::move(retry.ast);
+                    parse_warnings = std::move(retry.warnings);
+                }
+            }
         } else if (cfg.engine == EngineType::AI1) {
             ast = ai1::load_mes(path, cfg);
         } else {
@@ -139,7 +200,7 @@ static void decompile_file(const std::string& path, Config& cfg, bool force,
         if (segment_count == 0 && input_size > 4) {
             println_color("b-yellow", ".rkt (warning: no segments parsed from " +
                 std::to_string(input_size) + " byte input - wrong --engine or missing --extraop?)");
-        } else if (output.size() < 256 && input_size > 64) {
+        } else if (output.size() < SUSPECT_OUTPUT_MAX && input_size > SUSPECT_INPUT_MIN) {
             println_color("b-yellow", ".rkt (warning: output is suspiciously small. only " +
                 std::to_string(output.size()) + " bytes from " +
                 std::to_string(input_size) + " byte input)");

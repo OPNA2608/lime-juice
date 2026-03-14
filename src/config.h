@@ -41,6 +41,7 @@ struct Config {
     bool use_dict = true;
     uint8_t dict_base = 0x80;
     bool extra_op = false;
+    bool decrypt_op = true;
 
     // decompile options
     bool decode = true;
