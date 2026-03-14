@@ -298,6 +298,9 @@ static void encode_file(const std::string& path, const std::string& format_str,
         } else {
             write_file(out, gpc::encode(img));
         }
+
+        print_color("b-white", stem);
+        println_color("b-green", get_ext(out));
     } else if (ext == ".gif") {
         std::string out = output_override.empty()
             ? replace_ext(path, ".gpa") : output_override;
@@ -310,12 +313,11 @@ static void encode_file(const std::string& path, const std::string& format_str,
 
         auto frames = load_gif(path);
         write_file(out, gpa::encode(frames));
+        print_color("b-white", stem);
+        println_color("b-green", get_ext(out));
     } else {
         throw std::runtime_error("unsupported input format: " + ext);
     }
-
-    print_color("b-white", stem);
-    println_color("b-green", get_ext(out));
 }
 
 int main(int argc, char* argv[]) {
