@@ -1,161 +1,298 @@
-# NOTE: Until I write a real one, this readme is just a direct copy of dantecsm's Juice fork. Please be patient & wait warmly.
+# lime-juice
 
-## Usage
-Install [Racket](https://racket-lang.org/) and run the following command:
-```bash
-raco exe -o juice.exe mes/juice.rkt
+A decompiler and compiler for MES bytecode, the scripting format used by visual novel engines from Elf, Alice Soft, Silky's, Fairytale, and other software houses throughout the late 80s and into the 90s. Ported from [tomyun's "juice" tool](https://github.com/tomyun/juice) written in Racket. Yes, the title is a bad pun.
+
+Juice converts MES binary scripts into human-readable RKT (Lisp-style S-expression) source files, and compiles them back. This enables translation, modding, and analysis of games built on these engines.
+
+Not all engine commands have been identified yet. Unresolved commands appear in decompiled scripts as `(cmd:N ...)` with their raw opcode number. If you figure out what one does, contributions are welcome.
+
+A companion tool, **juice-img**, handles the image formats used by the same games (GP4, GPC, GPA), converting them to and from PNG/GIF.
+
+## Supported Engines
+
+Six engine versions were used across these games. Functionally, they fall into three distinct families:
+
+| Family | Versions | Notes |
+|--------|----------|-------|
+| **AI1** | AI1, AI2 | Older engine with simpler bytecode. AI2 is functionally identical to AI1. |
+| **AI5** | AI4, AI5 | The most common engine. AI4 is functionally identical to AI5. |
+| **ADV** | AI3, ADV | Advanced engine with segment-based structure. ADV forked from AI3; they are functionally equivalent. |
+
+**AI5WIN**, a Windows port of AI5, also exists but is not currently supported by juice. It shares most of its bytecode format with AI5 but has some Windows-specific differences.
+
+## Quick Start
+
+Decompile all MES scripts in a directory:
+
 ```
-Then reference to [README](./mes/README.md)
+juice -d *.MES
+```
 
-## Note
-Decompile rules for `--engine ADV --extraop`
-![graph1.png](doc/graph1.png)
-![graph2.png](doc/graph2.png)
-![graph3.png](doc/graph3.png)
+This produces `.rkt` source files alongside the originals. Edit them as needed, then compile back:
 
-## Some Script Syntax Summaries
-<details><summary><strong>branch-var</strong></summary>
-<pre><code>
-(set-var A 0)
-(branch-var A
-(</>
-    (/ (str "A is 0"))
-    (/ (str "A is 1"))
-    (/ (str "A is 2"))
-    (/ (str "A is 3"))
-))
-</code></pre>
-Equivalent to
-<pre><code>
-A = 0
-switch (A) {
-    case 0:
-    console.log("A is 0")
-    break
-    case 1:
-    console.log("A is 1")
-    break
-    case 2:
-    console.log("A is 2")
-    break
-    case 3:
-    console.log("A is 3")
-    break
-}
-</code></pre>
-</details>
-<details><summary><strong>branch-reg</strong></summary>
-<pre><code>
-(set-reg 80 #t)
-(branch-reg 80
-    (</> 
-        (/ (str "reg 80 is false")) 
-        (/ (str "reg 80 is true"))
-    )
-)
-</pre></code>
-Equivalent to
-<pre><code>
-reg[80] = true
-if (reg[80] === false) {
-    console.log("reg 80 is false")
-} else {
-    console.log("reg 80 is true")
-}
-</pre></code>
-</details>
-<details><summary><strong>if</strong></summary>
-<pre><code>
-(set-var A 1)
-(set-var B 1)
-(if (</> 
-    (// (? (= A 1)) (str "A is 1"))
-    (// (? (= B 2)) (str "B is 2"))
-    (// (nop@) (str "A is not 1 and B is not 2"))
-))
-</pre></code>
-Equivalent to
-<pre><code>
-A = 1
-B = 1
-if (A == 1) {
-    console.log("A is 1")
-} else if (B == 2) {
-    console.log("B is 2")
-} else {
-    console.log("A is not 1 and B is not 2")
-}
-</pre></code>
-</details>
-<details><summary><strong>when</strong></summary>
-<pre><code>
-(set-var A 1)
-(set-var B 1)
+```
+juice -c *.rkt
+```
+
+For games that need specific settings, use a preset:
+
+```
+juice -d -p yuno *.MES
+```
+
+Settings from the preset are stored in the RKT file's `(meta ...)` block, so you only need to specify the preset when decompiling. Compilation reads the settings from the file automatically.
+
+## juice CLI Reference
+
+### Commands
+
+| Flag | Description |
+|------|-------------|
+| `-d`, `--decompile` | Decompile MES bytecode into RKT source |
+| `-c`, `--compile` | Compile RKT source into MES bytecode |
+| `-P`, `--show-preset` | Show supported game presets |
+| `-v`, `--version` | Show version |
+| `-h`, `--help` | Show usage help |
+
+### General Options
+
+| Flag | Description |
+|------|-------------|
+| `-f`, `--force` | Overwrite existing output files |
+| `-o`, `--output PATH` | Specify output file path. Cannot be used with multiple input files. |
+
+### Engine Selection
+
+| Flag | Description |
+|------|-------------|
+| `-e`, `--engine TYPE` | Engine type: `AI5` (default), `AI1`, `ADV`. Aliases: `AI2` maps to `AI1`, `AI4` maps to `AI5`, `AI5X` maps to `AI5` with `--dictbase D0 --extraop`. |
+| `-p`, `--preset NAME` | Apply a named game preset. Overrides engine, charset, and other defaults. See `--show-preset` for the full list. |
+
+### Character Encoding
+
+| Flag | Description |
+|------|-------------|
+| `-C`, `--charset NAME` | Character set for SJIS mapping. Default: `pc98`. Options: `pc98`, `english`, `europe`, `korean-gamebox`, `korean-hannuri`, `korean-kk`, `korean-parangsae`, `chinese`. |
+
+Charsets define the mapping between Shift-JIS byte pairs in the binary and Unicode characters in the RKT source. The default `pc98` charset covers standard Japanese SJIS plus PC-98-exclusive characters. The other charsets extend this with mappings for translation projects targeting other languages (Korean syllables, European diacritics, etc.).
+
+### AI5 Engine Parameters
+
+| Flag | Description |
+|------|-------------|
+| `-D`, `--dictbase HEX` | Dictionary base offset in hex. Default: `80`. Some later games use `D0`. |
+| `-E`, `--extraop` | Enable extended opcodes used by some later AI5/ADV games. |
+
+The dictionary base determines how many byte values are reserved for dictionary references vs. inline characters. Games like Isaku, YU-NO, Kakyuusei, Jack, and Mobius Roid use `D0` instead of the default `80`. If you see errors like "dict index >= dict size" during decompilation, try `--dictbase D0`.
+
+The `--extraop` flag changes how certain opcodes are decoded. It's required for games like X-Girl and YU-NO that introduced slightly different instruction layouts for a few opcodes. Most later (1994+) ADV games require extraop. If decompilation produces empty or garbled output, this flag (possibly combined with `--dictbase D0`) is often the fix.
+
+### Decompile Options
+
+| Flag | Description |
+|------|-------------|
+| `--auto-engine` | Auto-detect engine type from the first input file. Prints the detected engine before processing. |
+| `--no-decode` | Skip SJIS character decoding. Leaves characters as raw byte pairs instead of converting to Unicode. |
+| `--no-resolve` | Skip command/function name resolution. Leaves raw opcode numbers instead of symbolic names like `wait` or `mes-jump`. |
+| `--protag SPEC` | Control fusion of protagonist proc/call instructions into text nodes. See below. |
+
+#### Protagonist Fusion (`--protag`)
+
+Many games use a `(proc N)` or `(call VAR)` instruction between text fragments to insert the protagonist's name. By default, these appear as separate instructions:
+
+```racket
+(text "【")
 (proc 0)
-(when (</>
-    (//  (? (= A 1))
-        (str "A = 1") (wait) (text-reset)
-    )
-    (//  (? (= A 0))
-        (str "A = 0") (wait) (text-reset)
-    )
-    (//  (? (= B 1))
-        (str "B = 1") (wait) (text-reset)
-    )
-))
-</pre></code>
-Equivalent to
-<pre><code>
-A = 1
-B = 1
-if (A == 1) {
-  console.log("A = 1")
-}
-if (A == 0) {
-  console.log("A = 0")
-}
-if (B == 1) {
-  console.log("B = 1")
-}
-</pre></code>
-</details>
-<details><summary><strong>seg-call</strong></summary>
+(text "】Hello.")
+```
 
-`seg-call` exits the current seg block and scans subsequent seg blocks in the file in order. It executes the first seg block whose condition matches, then returns to the point where seg-call was invoked to continue execution.
-<pre><code>
-(seg*
-  (str "before seg call") (wait) (text-reset)
-  (V = 3)
-  (seg-call)
-  (str "after seg call") (wait) (text-reset)
-)
-(seg (= V 2)
-  (str "foo") (wait) (text-reset)
-)
-(seg*
-  (str "bar") (wait) (text-reset)
-)
-(seg
-  ...
-)
-</pre></code>
-Output:
-<pre><code>
-before seg call
-bar
-after seg call
-</pre></code>
-</details>
-<details><summary><strong>mes-load?</strong></summary>
+With `--protag 0`, the decompiler fuses them into the text:
 
-`mes-load?` loads a `.mec` file into memory and executes it.
+```racket
+(text "【" 0 "】Hello.")
+```
 
-* `(mes-load? "file path" address)` loads a .mec file into the specified memory address.
-* `(mes-load? address)` executes the .mec file previously loaded into that address.
-<pre><code>
-(mes-load? "b:¥mes¥system.mec" 0)
-(mes-load? 0)
-(mes-load? "b:¥mes¥y_a003c.mec" 4096)
-(mes-load? 4096)
-</pre></code>
+Values for `--protag`:
+- `none` (default): no fusion
+- `all`: fuse all proc/call instructions found between text
+- A number (e.g. `0`, `3`, `51`): fuse only the specified proc ID
+- A letter (e.g. `Z`): fuse only the specified call variable
+- A comma-separated list (e.g. `0,Z` or `0,3`): fuse multiple
+
+### Compile Options
+
+| Flag | Description |
+|------|-------------|
+| `--auto-wrap` | Auto-wrap text nodes to fit the text-frame width defined in the script. Useful when translated text is longer than the original. |
+| `--no-compress` | Skip AI5 dictionary compression. Produces larger output files. |
+
+#### Auto-Wrap
+
+When `--auto-wrap` is enabled, the compiler scans the script for `(text-frame X1 Y1 X2 Y2)` commands to determine the display width, then automatically inserts line breaks in `(text "...")` strings that would overflow. This is especially useful for translation projects to Western languages where the translated script is longer than the Japanese.
+
+### Game Presets
+
+Presets bundle the correct engine, dictionary base, extraop, and protagonist settings for specific games. Use `-P` or `--show-preset` to list them. You only need the preset when decompiling; the settings are saved in the RKT file's metadata.
+
+<details>
+<summary>Full preset list</summary>
+
+| Preset | Game | Engine | Special Settings |
+|--------|------|--------|------------------|
+| `aishi` | Ai Shimai | AI5 | defaults |
+| `angel` | Angel Hearts | AI1 | |
+| `coc` | Curse of Castle | AI5 | defaults |
+| `cre` | Crescent | AI5 | defaults |
+| `deja` | De-Ja | AI1 | protag: variable Y |
+| `deja2` | De-Ja 2 | AI5 | defaults |
+| `dk` | Dragon Knight | AI1 | |
+| `dk2` | Dragon Knight 2 | AI1 | protag: variable G |
+| `dk3` | Dragon Knight 3 | AI5 | protag: proc 26 |
+| `dk4` | Dragon Knight 4 | AI5 | defaults |
+| `elle` | ELLE | AI5 | protag: variable Z |
+| `foxy` | Foxy | AI5 | defaults |
+| `foxy2` | Foxy 2 | AI5 | defaults |
+| `isaku` | Isaku | AI5 | dictbase D0, extraop |
+| `jack` | Jack | AI5 | dictbase D0 |
+| `jan` | Jan Jaka Jan | AI5 | protag: proc 51 |
+| `kakyu` | Kakyuusei | AI5 | dictbase D0, protag: proc 3 |
+| `kawa` | Kawarazaki-ke no Ichizoku | AI5 | defaults |
+| `metal` | Metal Eye | AI5 | defaults |
+| `metal2` | Metal Eye 2 | AI5 | defaults |
+| `mobius` | Mobius Roid | AI5 | dictbase D0 |
+| `nanpa` | Doukyuusei | AI5 | protag: proc 0 |
+| `nanpa2` | Doukyuusei 2 | AI5 | protag: proc 0 |
+| `nono` | Nonomura Byouin no Hitobito | AI5 | defaults |
+| `pinky` | Pinky Ponky 1/2/3 | AI1 | protag: variable N |
+| `pre` | Premium | AI5 | defaults |
+| `pre2` | Premium 2 | AI5 | defaults |
+| `raygun` | RAY-GUN | AI1 | |
+| `reira` | Reira Slave Doll | AI5 | defaults |
+| `shima` | Ushinawareta Rakuen | AI5 | defaults |
+| `syan` | Shangrlia | AI5 | defaults |
+| `syan2` | Shangrlia 2 | AI5 | defaults |
+| `ten` | Tenshin Ranma | AI5 | defaults |
+| `ww` | Words Worth | AI5 | protag: proc 0 |
+| `xgirl` | X-Girl | ADV | extraop |
+| `yuno` | YU-NO | AI5 | dictbase D0, extraop, protag: proc 0 |
+
 </details>
+
+### RKT Metadata
+
+When compiling, juice reads settings from the `(meta ...)` block at the top of the RKT file. These override CLI defaults, so you generally don't need to repeat flags when compiling:
+
+```racket
+(meta (engine 'AI5) (charset "pc98") (extraop #t))
+```
+
+### Input/Output Handling
+
+- Accepts multiple input files. Glob patterns (`*`, `?`) are expanded automatically.
+- Output filenames are generated by swapping the extension: `.mes` becomes `.rkt` (decompile), `.rkt` becomes `.mes` (compile).
+- The `-o` flag overrides the output path but can only be used with a single input file.
+
+---
+
+## juice-img CLI Reference
+
+### Commands
+
+| Flag | Description |
+|------|-------------|
+| `-d`, `--decode` | Decode image files to PNG (GP4, GPC) or GIF (GPA) |
+| `-c`, `--compile` | Compile PNG to GP4/GPC, or GIF to GPA |
+| `-v`, `--version` | Show version |
+| `-h`, `--help` | Show usage help |
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `-f`, `--force` | Overwrite existing output files |
+| `-o`, `--output PATH` | Specify output file path (single file only) |
+| `-F`, `--format FMT` | Target format when compiling PNG: `gp4` or `gpc`. Default: `gpc`. Ignored if the output file extension already specifies a format. |
+| `-p`, `--palette PATH` | Palette source (a GPC file) for GPA decode. If not specified, juice-img searches the parent directory for a matching GPC file. |
+| `-W`, `--force-width N` | Override canvas width for GP4 decode. Default: 640. Only applies to GP4 files. |
+
+### Supported Formats
+
+| Format | Input | Output | Notes |
+|--------|-------|--------|-------|
+| **GP4** | `.gp4` | `.png` | 4-pixel column format with move-to-front + RLE compression. Width must be a multiple of 4; non-conforming images are truncated with a warning during encode. |
+| **GPC** | `.gpc` | `.png` | Indexed color with palette, XOR + interlacing compression. |
+| **GPA** | `.gpa` | `.gif` | Multi-frame animation. Requires a palette (embedded or from a separate GPC file). |
+
+#### GPA Notes
+
+- When decoding GPA files, if the animation has no embedded palette, juice-img searches for a GPC file with the same name in the parent directory tree. Use `-p` to specify one manually.
+- If no palette is found at all, the resulting GIF will come out entirely black. If your decoded GPA looks all black, this is why.
+- The last frame of a decoded GIF may contain metadata (original negative offsets) used for lossless re-encoding. Do not edit this frame if you plan to re-encode the GPA.
+
+---
+
+## Building from Source
+
+### Requirements
+
+- CMake 3.16 or higher
+- A C++17 compiler (Clang, GCC, or MSVC)
+- iconv (optional, provides fallback for unmapped characters during SJIS conversion)
+- Willingness to suffer and fight with `cmake` flags for hours on end.
+
+### Build Steps
+
+```bash
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
+
+Assuming you have your system set up perfectly like mine, this produces two executables: `juice` and `juice-img`.
+If you don't, well - good luck.
+
+### Platform Notes
+
+- **Windows (MinGW):** The build statically links the C++ runtime so the executables can run standalone. If system iconv is not available, a vendored win-iconv is used automatically.
+- **Linux/macOS:** iconv is typically provided by the system's libc. If CMake cannot find it, the build proceeds without it, but some uncommon character mappings may not be available.
+
+---
+
+## Troubleshooting
+
+### Empty or garbled decompiler output
+
+The most common cause is using the wrong engine settings. Try these in order:
+
+1. **Use `--auto-engine`** to let juice detect the engine type from the file.
+2. **Try a preset** if one exists for your game (`-P` lists them all).
+3. **Try `--extraop`** if you're working with a later AI5 or ADV game.
+4. **Try `--dictbase D0`** if you see dictionary index errors.
+
+### "output file already exists"
+
+Use `-f` to force overwrite.
+
+### Cannot recompile existing .rkt files from a different version of Juice
+
+lime-juice formats its RKT script slightly differently, which may result in being unable to compile RKT files that were created by tomyun or dantecsm's juice.exe.
+Try re-decompiling the .MES from the original file, fixing any non-text differences, and then compiling your RKT script file again.
+
+### Wrong characters in output
+
+Make sure you're using the right charset (`-C`). The default `pc98` is correct for most Japanese games, but English translations and other localizations need their specific charset.
+
+### GPA decoding shows wrong colors or all black
+
+The GPA file may not have an embedded palette. Either provide one with `-p palette.gpc` or place the matching GPC file in a sibling directory where juice-img can find it.
+
+---
+
+## Further Documentation
+
+- [MES Binary Format Specification](doc/mes-format.md)
+- [AI5 Scripting Reference](doc/scripting-ai5.md)
+- [AI1 Scripting Reference](doc/scripting-ai1.md)
+- [ADV Scripting Reference](doc/scripting-adv.md)
+- [GP4 Image Format](doc/gp4-ada.md)
+- [GPC/GPA Image Format](doc/gpc-gpa.md)
