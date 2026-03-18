@@ -370,7 +370,8 @@ static void emit_text(ByteWriter& out, const AstNode& node, const Config& cfg,
 
     // check for #:color keyword
     if (node.children.size() >= 2 &&
-        node.children[0].is_keyword() && node.children[0].str_val == "color") {
+        node.children[0].is_keyword() && 
+        (node.children[0].str_val == "color" || node.children[0].str_val == "col")) {
         out.emit(0x10);  // text-color CMD byte
         emit_expr_val(out, node.children[1], cfg, cs, dict_lookup);
         start = 2;
@@ -514,10 +515,24 @@ static void emit_stmt(ByteWriter& out, const AstNode& node, const Config& cfg,
 
     // ── str ──────────────────────────────────────────────────────
     if (tag == "str") {
+        size_t str_start = 0;
+
+        // handle #:col / #:color prefix
+        if (str_start < node.children.size() && node.children[str_start].is_keyword() &&
+            (node.children[str_start].str_val == "col" || node.children[str_start].str_val == "color")) {
+            str_start++;
+
+            if (str_start < node.children.size()) {
+                out.emit(0x10); // text-color CMD
+                emit_expr_val(out, node.children[str_start], cfg, cs, dict_lookup);
+                str_start++;
+            }
+        }
+
         out.emit(TOK_STR);
 
-        if (!node.children.empty() && node.children[0].is_string()) {
-            ai1::emit_str_bytes(out, node.children[0].str_val);
+        if (str_start < node.children.size() && node.children[str_start].is_string()) {
+            ai1::emit_str_bytes(out, node.children[str_start].str_val);
         }
 
         out.emit(TOK_STR);

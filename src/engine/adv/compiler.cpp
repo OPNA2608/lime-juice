@@ -509,7 +509,7 @@ static void emit_text(ByteWriter& out, const AstNode& node, const Config& cfg, C
 
     // handle #:col prefix
     if (i < node.children.size() && node.children[i].is_keyword() &&
-        node.children[i].str_val == "col") {
+        node.children[i].str_val == "col" || node.children[i].str_val == "color") {
         i++; // skip #:col keyword
 
         if (i < node.children.size()) {
@@ -656,9 +656,23 @@ static void emit_text(ByteWriter& out, const AstNode& node, const Config& cfg, C
 // ── str node encoding (CHRS!) ────────────────────────────────────────
 
 static void emit_str(ByteWriter& out, const AstNode& node, Charset& cs) {
-    // (str "text" ['br] ...) → 0x21 + SJIS bytes + 0x00 [+ 0xA5 ...]
+    // (str [#:col N] "text" ['br] ...) → [0xA8 N] 0x21 + SJIS bytes + 0x00 [+ 0xA5 ...]
     // 'br/'pg from the text fuser close the str, emit the cmd, then
     // re-open the str only if more content follows.
+    size_t start = 0;
+
+    // handle #:col / #:color prefix
+    if (start < node.children.size() && node.children[start].is_keyword() &&
+        (node.children[start].str_val == "col" || node.children[start].str_val == "color")) {
+        start++;
+
+        if (start < node.children.size()) {
+            out.emit(0xA8); // text-color CMD
+            emit_num(out, node.children[start].int_val);
+            start++;
+        }
+    }
+
     bool str_open = false;
 
     auto ensure_open = [&]() {
@@ -679,7 +693,8 @@ static void emit_str(ByteWriter& out, const AstNode& node, Charset& cs) {
 
     ensure_open();
 
-    for (const auto& child : node.children) {
+    for (size_t ci = start; ci < node.children.size(); ci++) {
+        const auto& child = node.children[ci];
 
         if (child.is_string()) {
             ensure_open();
