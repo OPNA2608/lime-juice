@@ -7,6 +7,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Iconv)
 
+include(GNUInstallDirs)
+
 # shared CLI utilities (used by both juice and juice-img)
 add_library(cli_utils STATIC
     src/cli_utils.cpp
@@ -97,3 +99,5 @@ if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+install(TARGETS juice juice-img)
