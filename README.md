@@ -296,3 +296,35 @@ The GPA file may not have an embedded palette. Either provide one with `-p palet
 - [ADV Scripting Reference](doc/scripting-adv.md)
 - [GP4 Image Format](doc/gp4-ada.md)
 - [GPC/GPA Image Format](doc/gpc-gpa.md)
+
+## License
+
+```
+lime-juice: C++ port of Tomyun's "Juice" de/recompiler for PC-98 games
+Copyright (C) 2026 Fuzion
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+```
+
+---
+
+Most of this project's files are licensed under the GNU Public License, version 3 or later (SPDX: `GPL-3.0-or-later`). For the full text of this license, see the included [`/LICENSE.md`](LICENSE.md).
+
+Exempt from this license are:
+
+- all files in `/docs/` (not code)
+- the external projects included in `/third_party/`
+  - `iconv` ([win-iconv](https://github.com/win-iconv/win-iconv)): Public Domain
+  - `lecram` ([gifenc](https://github.com/lecram/gifenc) & [gifdec](https://github.com/lecram/gifdec)): Public Domain
+  - `lodepng` ([LodePNG](https://github.com/lvandeve/lodepng)): Zlib
